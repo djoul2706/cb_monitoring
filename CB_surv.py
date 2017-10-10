@@ -53,6 +53,8 @@ def parse_bucket_stats(data):
 	swap_total =  data["op"]["samples"]["swap_total"]
 	timestamp =  data["op"]["samples"]["timestamp"]
 	vb_active_num =  data["op"]["samples"]["vb_active_num"]
+	vb_replica_eject =  data["op"]["samples"]["vb_replica_eject"]
+	ep_mem_high_wat =  data["op"]["samples"]["ep_mem_high_wat"]
 	vb_active_num_non_resident =  data["op"]["samples"]["vb_active_num_non_resident"]
 	vb_active_resident_items_ratio =  data["op"]["samples"]["vb_active_resident_items_ratio"]
 	vb_replica_resident_items_ratio =  data["op"]["samples"]["vb_replica_resident_items_ratio"]
@@ -84,6 +86,8 @@ def parse_bucket_stats(data):
 		'swap_total' : [max(swap_total),min(swap_total),sum(swap_total)/len(swap_total)],
 		'timestamp' : [max(timestamp),min(timestamp),sum(timestamp)/len(timestamp)],
 		'vb_active_num' : [max(vb_active_num),min(vb_active_num),sum(vb_active_num)/len(vb_active_num)],
+		'ep_mem_high_wat' : [max(ep_mem_high_wat),min(ep_mem_high_wat),sum(ep_mem_high_wat)/len(ep_mem_high_wat)],
+		'vb_replica_eject' : [max(vb_replica_eject),min(vb_replica_eject),sum(vb_replica_eject)/len(vb_replica_eject)],
 		'vb_active_num_non_resident' : [max(vb_active_num_non_resident),min(vb_active_num_non_resident),sum(vb_active_num_non_resident)/len(vb_active_num_non_resident)],
 		'vb_active_resident_items_ratio' : [max(vb_active_resident_items_ratio),min(vb_active_resident_items_ratio),sum(vb_active_resident_items_ratio)/len(vb_active_resident_items_ratio)],
 		'vb_replica_resident_items_ratio' : [max(vb_replica_resident_items_ratio),min(vb_replica_resident_items_ratio),sum(vb_replica_resident_items_ratio)/len(vb_replica_resident_items_ratio)],
@@ -102,8 +106,8 @@ for node in data["nodes"]:
 	print(node_values)
 
 # recuperation des stats pour le bucket
-bucket = 'Listes'
-zoom = 'hour'
+bucket = 'dashboard'
+zoom = 'minute'
 url = 'http://localhost:8091/pools/default/buckets/' + bucket + '/stats?zoom=' + zoom
 
 f = urllib2.urlopen(url)
