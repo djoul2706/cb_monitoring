@@ -2,6 +2,7 @@
 
 while (true)
 do
-/opt/couchbase/bin/CB_surv.sh | nc 172.17.0.1 5000
+#/opt/couchbase/bin/CB_surv.sh | nc 192.168.61.1 5000
+python CB_surv.py | nc 192.168.61.1 5000
 sleep 5
 done

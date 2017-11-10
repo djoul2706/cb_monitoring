@@ -4,7 +4,33 @@ import time
 import datetime
 import urllib2
 import urllib
-import numpy as np
+#import numpy as np
+import base64
+import logging
+from logging.handlers import RotatingFileHandler
+
+def init_logger(logfile,loglevel=logging.DEBUG,consolelevel=logging.DEBUG):
+	logger = logging.getLogger()
+
+	logger.setLevel(loglevel)
+	formatter = logging.Formatter('%(asctime)s :: %(levelname)s :: %(message)s')
+
+	file_handler = RotatingFileHandler(logfile, 'a', 1000000, 1)
+	file_handler.setLevel(loglevel)
+	file_handler.setFormatter(formatter)
+	logger.addHandler(file_handler)
+
+	stream_handler = logging.StreamHandler()
+	stream_handler.setLevel(consolelevel)
+	stream_handler.setFormatter(formatter)
+	logger.addHandler(stream_handler)
+
+	return logger
+
+def merge_two_dicts(x, y):
+    z = x.copy()   # start with x's keys and values
+    z.update(y)    # modifies z with y's keys and values & returns None
+    return z
 
 def parse_node_stats(node):
 	node_status = node["status"]
@@ -16,19 +42,24 @@ def parse_node_stats(node):
 	'datetime' : str(datetime.datetime.now()),
 	'status' : node_status,
 	'clusterMembership' : node_clusterMembership,
-	'hostname' : node_hostname,
-	'mem_used' : node_interestingStats["mem_used"],
-	'ops' : node_interestingStats["ops"],
-	'ep_bg_fetched' : node_interestingStats["ep_bg_fetched"],
-	'cpu_utilization_rate' : node_systemStats["cpu_utilization_rate"],
-	'swap_used' : node_systemStats["swap_used"],
-	'swap_total' : node_systemStats["swap_total"],
-	'mem_total' : node_systemStats["cpu_utilization_rate"],
-	'mem_free' : node_systemStats["cpu_utilization_rate"]
+	'hostname' : node_hostname
 	}
+	if len(node_interestingStats) > 0 :
+		vals_stat = {
+		'mem_used' : node_interestingStats["mem_used"],
+		'ops' : node_interestingStats["ops"],
+		'ep_bg_fetched' : node_interestingStats["ep_bg_fetched"],
+		'cpu_utilization_rate' : node_systemStats["cpu_utilization_rate"],
+		'swap_used' : node_systemStats["swap_used"],
+		'swap_total' : node_systemStats["swap_total"],
+		'mem_total' : node_systemStats["cpu_utilization_rate"],
+		'mem_free' : node_systemStats["cpu_utilization_rate"]
+		}
+		vals = merge_two_dicts(vals, vals_stat)
+
 	return vals
 
-def parse_bucket_stats(data):
+def parse_bucket_stats(data, bucket_name):
 	cmd_get =  data["op"]["samples"]["cmd_get"]
 	cmd_set =  data["op"]["samples"]["cmd_set"]
 	couch_docs_fragmentation =  data["op"]["samples"]["couch_docs_fragmentation"]
@@ -61,57 +92,73 @@ def parse_bucket_stats(data):
 	xdc_ops =  data["op"]["samples"]["xdc_ops"]
 
 	vals_json = {
-		'datetime' : str(datetime.datetime.now()),
-		'cmd_get' : [max(cmd_get),min(cmd_get),sum(cmd_get)/len(cmd_get)],
-		'cmd_set' : [max(cmd_set),min(cmd_set),sum(cmd_set)/len(cmd_set)],
-		'couch_docs_fragmentation' : [max(couch_docs_fragmentation),min(couch_docs_fragmentation),sum(couch_docs_fragmentation)/len(couch_docs_fragmentation)],
-		'cpu_utilization_rate' : [max(cpu_utilization_rate),min(cpu_utilization_rate),sum(cpu_utilization_rate)/len(cpu_utilization_rate)],
-		'curr_connections' : [max(curr_connections),min(curr_connections),sum(curr_connections)/len(curr_connections)],
-		'ep_bg_fetched' : [max(ep_bg_fetched),min(ep_bg_fetched),sum(ep_bg_fetched)/len(ep_bg_fetched)],
-		'ep_cache_miss_rate' : [max(ep_cache_miss_rate),min(ep_cache_miss_rate),sum(ep_cache_miss_rate)/len(ep_cache_miss_rate)],
-		'ep_diskqueue_drain' : [max(ep_diskqueue_drain),min(ep_diskqueue_drain),sum(ep_diskqueue_drain)/len(ep_diskqueue_drain)],
-		'ep_diskqueue_fill' : [max(ep_diskqueue_fill),min(ep_diskqueue_fill),sum(ep_diskqueue_fill)/len(ep_diskqueue_fill)],
-		'ep_flusher_todo' : [max(ep_flusher_todo),min(ep_flusher_todo),sum(ep_flusher_todo)/len(ep_flusher_todo)],
-		'ep_oom_errors' : [max(ep_oom_errors),min(ep_oom_errors),sum(ep_oom_errors)/len(ep_oom_errors)],
-		'ep_tmp_oom_errors' : [max(ep_tmp_oom_errors),min(ep_tmp_oom_errors),sum(ep_tmp_oom_errors)/len(ep_tmp_oom_errors)],
-		'ep_queue_size' : [max(ep_queue_size),min(ep_queue_size),sum(ep_queue_size)/len(ep_queue_size)],
-		'ep_resident_items_rate' : [max(ep_resident_items_rate),min(ep_resident_items_rate),sum(ep_resident_items_rate)/len(ep_resident_items_rate)],
-		'mem_actual_free' : [max(mem_actual_free),min(mem_actual_free),sum(mem_actual_free)/len(mem_actual_free)],
-		'mem_actual_used' : [max(mem_actual_used),min(mem_actual_used),sum(mem_actual_used)/len(mem_actual_used)],
-		'mem_free' : [max(mem_free),min(mem_free),sum(mem_free)/len(mem_free)],
-		'mem_total' : [max(mem_total),min(mem_total),sum(mem_total)/len(mem_total)],
-		'mem_used' : [max(mem_used),min(mem_used),sum(mem_used)/len(mem_used)],
-		'mem_used_sys' : [max(mem_used_sys),min(mem_used_sys),sum(mem_used_sys)/len(mem_used_sys)],
-		'ops' : [max(ops),min(ops),sum(ops)/len(ops)],
-		'swap_total' : [max(swap_total),min(swap_total),sum(swap_total)/len(swap_total)],
-		'timestamp' : [max(timestamp),min(timestamp),sum(timestamp)/len(timestamp)],
-		'vb_active_num' : [max(vb_active_num),min(vb_active_num),sum(vb_active_num)/len(vb_active_num)],
-		'ep_mem_high_wat' : [max(ep_mem_high_wat),min(ep_mem_high_wat),sum(ep_mem_high_wat)/len(ep_mem_high_wat)],
-		'vb_replica_eject' : [max(vb_replica_eject),min(vb_replica_eject),sum(vb_replica_eject)/len(vb_replica_eject)],
-		'vb_active_num_non_resident' : [max(vb_active_num_non_resident),min(vb_active_num_non_resident),sum(vb_active_num_non_resident)/len(vb_active_num_non_resident)],
-		'vb_active_resident_items_ratio' : [max(vb_active_resident_items_ratio),min(vb_active_resident_items_ratio),sum(vb_active_resident_items_ratio)/len(vb_active_resident_items_ratio)],
-		'vb_replica_resident_items_ratio' : [max(vb_replica_resident_items_ratio),min(vb_replica_resident_items_ratio),sum(vb_replica_resident_items_ratio)/len(vb_replica_resident_items_ratio)],
-		'xdc_ops' : [max(xdc_ops),min(xdc_ops),sum(xdc_ops)/len(xdc_ops)]
+		"bucket_name" : bucket_name,
+		#"datetime" : str(datetime.datetime.now()),
+		"cmd_get" : max(cmd_get),
+		"cmd_set" : max(cmd_set),
+		"couch_docs_fragmentation" : max(couch_docs_fragmentation),
+		"cpu_utilization_rate" : max(cpu_utilization_rate),
+		"curr_connections" : max(curr_connections),
+		"ep_bg_fetched" : max(ep_bg_fetched),
+		"ep_cache_miss_rate" : max(ep_cache_miss_rate),
+		"ep_diskqueue_drain" : max(ep_diskqueue_drain),
+		"ep_diskqueue_fill" : max(ep_diskqueue_fill),
+		"ep_flusher_todo" : max(ep_flusher_todo),
+		"ep_oom_errors" : max(ep_oom_errors),
+		"ep_tmp_oom_errors" : max(ep_tmp_oom_errors),
+		"ep_queue_size" : max(ep_queue_size),
+		"ep_resident_items_rate" : max(ep_resident_items_rate),
+		"mem_actual_free" : max(mem_actual_free),
+		"mem_actual_used" : max(mem_actual_used),
+		"mem_free" : max(mem_free),
+		"mem_total" : max(mem_total),
+		"mem_used" : max(mem_used),
+		"mem_used_sys" : max(mem_used_sys),
+		"ops" : max(ops),
+		"swap_total" : max(swap_total),
+		"epoch" : max(timestamp),
+		"vb_active_num" : max(vb_active_num),
+		"ep_mem_high_wat" : max(ep_mem_high_wat),
+		"vb_replica_eject" : max(vb_replica_eject),
+		"vb_active_num_non_resident" : max(vb_active_num_non_resident),
+		"vb_active_resident_items_ratio" : max(vb_active_resident_items_ratio),
+		"vb_replica_resident_items_ratio" : max(vb_replica_resident_items_ratio),
+		"xdc_ops" : max(xdc_ops)
 		}
 
 	return vals_json
 
+logger = init_logger('activity.log',logging.INFO,logging.WARNING)
 
-# recuperation des données pour chacun des noeuds 
-f = urllib2.urlopen('http://localhost:8091/pools/nodes')
-data = json.load(f)
+while 1:
 
-for node in data["nodes"]:
-	node_values = parse_node_stats(node)
-	print(node_values)
+	# recuperation des données pour chacun des noeuds 
+	username = "Administrator"
+	password = "password"
+	request = urllib2.Request("http://localhost:8091/pools/nodes")
+	base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
+	request.add_header("Authorization", "Basic %s" % base64string)
+	
+	f = urllib2.urlopen(request)
+	data = json.load(f)
 
-# recuperation des stats pour le bucket
-bucket = 'dashboard'
-zoom = 'minute'
-url = 'http://localhost:8091/pools/default/buckets/' + bucket + '/stats?zoom=' + zoom
+	for node in data["nodes"]:
+		node_values = parse_node_stats(node)
+		logger.info(json.dumps(node_values))
 
-f = urllib2.urlopen(url)
-data = json.load(f)
+	# recuperation des stats pour le bucket
+	bucket = 'travel-sample'
+	zoom = 'minute'
+	url = 'http://localhost:8091/pools/default/buckets/' + bucket + '/stats?zoom=' + zoom
 
-print(parse_bucket_stats(data))
+	request = urllib2.Request(url)
+	base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
+	request.add_header("Authorization", "Basic %s" % base64string)
+	
+	f = urllib2.urlopen(request)
+	data = json.load(f)
+	
+	bucket_values = parse_bucket_stats(data, bucket)
+	logger.info(json.dumps(bucket_values))
 
+	time.sleep(15)
