@@ -4,10 +4,19 @@ import time
 import datetime
 import urllib2
 import urllib
-#import numpy as np
 import base64
 import logging
 from logging.handlers import RotatingFileHandler
+
+################### CONFIG ########################
+
+username = "Administrator"
+password = "password"
+buckets = ['travel-sample']
+zoom = 'minute'
+hosts = [ localhost, 192.168.61.101, 192.168.61.102 ] # liste des nodes du cluster 
+
+################### FUNCTIONS ########################
 
 def init_logger(logfile,loglevel=logging.DEBUG,consolelevel=logging.DEBUG):
 	logger = logging.getLogger()
@@ -28,8 +37,8 @@ def init_logger(logfile,loglevel=logging.DEBUG,consolelevel=logging.DEBUG):
 	return logger
 
 def merge_two_dicts(x, y):
-    z = x.copy()   # start with x's keys and values
-    z.update(y)    # modifies z with y's keys and values & returns None
+    z = x.copy()   
+    z.update(y)    
     return z
 
 def parse_node_stats(node):
@@ -39,11 +48,12 @@ def parse_node_stats(node):
 	node_interestingStats = node["interestingStats"]
 	node_systemStats = node["systemStats"]
 	vals = {
-	'datetime' : str(datetime.datetime.now()),
-	'status' : node_status,
-	'clusterMembership' : node_clusterMembership,
-	'hostname' : node_hostname
-	}
+		'datetime' : str(datetime.datetime.now()),
+		'status' : node_status,
+		'clusterMembership' : node_clusterMembership,
+		'hostname' : node_hostname
+		}
+		
 	if len(node_interestingStats) > 0 :
 		vals_stat = {
 		'mem_used' : node_interestingStats["mem_used"],
@@ -128,37 +138,56 @@ def parse_bucket_stats(data, bucket_name):
 
 	return vals_json
 
-logger = init_logger('activity.log',logging.INFO,logging.WARNING)
+def cbnode_monitoring(host):
 
-while 1:
-
-	# recuperation des données pour chacun des noeuds 
-	username = "Administrator"
-	password = "password"
-	request = urllib2.Request("http://localhost:8091/pools/nodes")
-	base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
+	request = urllib2.Request("http://" + host + ":8091/pools/nodes")
 	request.add_header("Authorization", "Basic %s" % base64string)
 	
-	f = urllib2.urlopen(request)
+	try:
+		urllib2.urlopen(request, timeout = 5)
+	
+	except urllib2.URLError, e:
+		alert = { 
+			"error" : "host %s unavailable" % host,
+			"clusterName" : clusterName,
+			"host" : host,
+			"code" : "CBrequestissue"
+			}
+		logger.warning(json.dumps(alert))
+		return 1
+	
 	data = json.load(f)
 
-	balanced = data["balanced"]
+	balanced = data["balanced"]	 	# couchbase > 5.0
 	clusterName = data["clusterName"]
 	
-	if balanced == false :
-		logger.warning("cluster %s is not balanced" % clusterName)
+	if balanced == False :
+		alert = { 
+			"error" : "cluster %s is not balanced" % clusterName,
+			"clusterName" : clusterName,
+			"code" : "CBclusternotbalanced"
+			}
+		logger.warning(json.dumps(alert))
+	
+	if len(data["nodes"]) < len(hosts) :
+		alert = { 
+			"error" : "Only %d/%d nodes available in the cluster %s" % (len(data["nodes"]), len(hosts), clusterName),
+			"clusterName" : clusterName,
+			"code" : "CBclusternodemissing"
+			}
+		logger.warning(json.dumps(alert))
 	
 	for node in data["nodes"]:
 		node_values = parse_node_stats(node)
 		logger.info(json.dumps(node_values))
+	
+	return 0
 
+def cbbucket_monitoring(host, buket):
 	# recuperation des stats pour le bucket
-	bucket = 'travel-sample'
-	zoom = 'minute'
-	url = 'http://localhost:8091/pools/default/buckets/' + bucket + '/stats?zoom=' + zoom
+	url = 'http://' + host + ':8091/pools/default/buckets/' + bucket + '/stats?zoom=' + zoom
 
 	request = urllib2.Request(url)
-	base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
 	request.add_header("Authorization", "Basic %s" % base64string)
 	
 	f = urllib2.urlopen(request)
@@ -166,5 +195,22 @@ while 1:
 	
 	bucket_values = parse_bucket_stats(data, bucket)
 	logger.info(json.dumps(bucket_values))
+	
 
+################### MAIN ########################
+
+logger = init_logger('activity.log',logging.INFO,logging.WARNING)
+base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
+
+while 1:
+	
+	for host in hosts:
+		if cbnode_monitoring(host) == 0:
+			break
+
+	for bucket in buckets:
+		for host in hosts:
+			if cbbucket_monitoring(host, bucket) == 0:
+				break
+				
 	time.sleep(15)
