@@ -142,6 +142,12 @@ while 1:
 	f = urllib2.urlopen(request)
 	data = json.load(f)
 
+	balanced = data["balanced"]
+	clusterName = data["clusterName"]
+	
+	if balanced == false :
+		logger.warning("cluster %s is not balanced" % clusterName)
+	
 	for node in data["nodes"]:
 		node_values = parse_node_stats(node)
 		logger.info(json.dumps(node_values))
