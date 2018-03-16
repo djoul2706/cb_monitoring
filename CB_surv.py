@@ -134,7 +134,7 @@ while 1:
 
 	# recuperation des données pour chacun des noeuds 
 	username = "Administrator"
-	password = "password"
+	password = "couchbase"
 	request = urllib2.Request("http://localhost:8091/pools/nodes")
 	base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
 	request.add_header("Authorization", "Basic %s" % base64string)
@@ -142,11 +142,11 @@ while 1:
 	f = urllib2.urlopen(request)
 	data = json.load(f)
 
-	balanced = data["balanced"]
-	clusterName = data["clusterName"]
+#	balanced = data["balanced"]
+#	clusterName = data["clusterName"]
 	
-	if balanced == false :
-		logger.warning("cluster %s is not balanced" % clusterName)
+#	if balanced == false :
+#		logger.warning("cluster %s is not balanced" % clusterName)
 	
 	for node in data["nodes"]:
 		node_values = parse_node_stats(node)
@@ -167,4 +167,5 @@ while 1:
 	bucket_values = parse_bucket_stats(data, bucket)
 	logger.info(json.dumps(bucket_values))
 
-	time.sleep(15)
+	time.sleep(60)
+
