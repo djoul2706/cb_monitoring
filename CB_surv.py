@@ -6,15 +6,21 @@ import urllib2
 import urllib
 import base64
 import logging
+import socket
 from logging.handlers import RotatingFileHandler
 
 ################### CONFIG ########################
 
 username = "Administrator"
-password = "password"
-buckets = ['travel-sample']
+password = "couchbase"
+buckets = ['travel-sample', 'beer-sample']
 zoom = 'minute'
-hosts = [ localhost, 192.168.61.101, 192.168.61.102 ] # liste des nodes du cluster 
+hosts = [ '192.168.2.35', '192.168.2.36', '192.168.2.37', '192.168.2.38', '192.168.2.39' ] # liste des nodes du cluster 
+logstash_server = "192.168.2.1"
+logstash_port = 5000
+
+logstash = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+logstash.connect((logstash_server, logstash_port))
 
 ################### FUNCTIONS ########################
 
@@ -103,7 +109,7 @@ def parse_bucket_stats(data, bucket_name):
 
 	vals_json = {
 		"bucket_name" : bucket_name,
-		#"datetime" : str(datetime.datetime.now()),
+		"datetime" : str(datetime.datetime.now()),
 		"cmd_get" : max(cmd_get),
 		"cmd_set" : max(cmd_set),
 		"couch_docs_fragmentation" : max(couch_docs_fragmentation),
@@ -138,13 +144,19 @@ def parse_bucket_stats(data, bucket_name):
 
 	return vals_json
 
+def envoiJson(json_input):
+  logstash = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  logstash.connect((logstash_server, logstash_port))
+  logstash.send(json_input)
+  logstash.close()
+
 def cbnode_monitoring(host):
 
 	request = urllib2.Request("http://" + host + ":8091/pools/nodes")
 	request.add_header("Authorization", "Basic %s" % base64string)
 	
 	try:
-		urllib2.urlopen(request, timeout = 5)
+		f = urllib2.urlopen(request, timeout = 5)
 	
 	except urllib2.URLError, e:
 		alert = { 
@@ -180,10 +192,11 @@ def cbnode_monitoring(host):
 	for node in data["nodes"]:
 		node_values = parse_node_stats(node)
 		logger.info(json.dumps(node_values))
+		envoiJson(json.dumps(node_values))
 	
 	return 0
 
-def cbbucket_monitoring(host, buket):
+def OLD_cbbucket_monitoring(host, buket):
 	# recuperation des stats pour le bucket
 	url = 'http://' + host + ':8091/pools/default/buckets/' + bucket + '/stats?zoom=' + zoom
 
@@ -196,6 +209,24 @@ def cbbucket_monitoring(host, buket):
 	bucket_values = parse_bucket_stats(data, bucket)
 	logger.info(json.dumps(bucket_values))
 	
+def cbbucket_monitoring(buket):
+    i = 0
+    while True:
+     try:
+         url = 'http://' + hosts[i] + ':8091/pools/default/buckets/' + bucket + '/stats?zoom=' + zoom
+         request = urllib2.Request(url)
+         request.add_header("Authorization", "Basic %s" % base64string)
+         f = urllib2.urlopen(request)
+	 break
+     except:
+		i += 1
+
+    data = json.load(f)
+
+    bucket_values = parse_bucket_stats(data, bucket)
+    logger.info(json.dumps(bucket_values))
+    envoiJson(json.dumps(bucket_values))
+
 
 ################### MAIN ########################
 
@@ -209,8 +240,6 @@ while 1:
 			break
 
 	for bucket in buckets:
-		for host in hosts:
-			if cbbucket_monitoring(host, bucket) == 0:
-				break
+		cbbucket_monitoring(bucket)
 				
-	time.sleep(15)
+	time.sleep(60)
